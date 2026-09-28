@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Effects
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -61,6 +60,12 @@ Panel {
   // icon's own luminance is left alone, so apps stay told apart by their
   // shape and internal contrast rather than by hue.
   readonly property real tintSaturation: 0.35
+
+  // The "theme" tint needs Qt5Compat, which a default Omarchy install does not
+  // ship. Probed once here instead of per icon; when it is missing the tinted
+  // styles fall back to monochrome, which needs only core Qt.
+  readonly property bool tintAvailable: tintProbe.status === Loader.Ready
+  Loader { id: tintProbe; source: Qt.resolvedUrl("IconTint.qml"); width: 0; height: 0; visible: false }
 
   // "flat" draws no pill at all, the way the built-in workspaces widget does:
   // the label's own opacity carries occupancy and the glyph marks the active one.
@@ -798,7 +803,8 @@ Panel {
                         // downscaled far enough to need it.
                         mipmap: false
                         asynchronous: true
-                        visible: status === Image.Ready && !appIcon.tinted && !appIcon.usesGlyph
+                        visible: status === Image.Ready && !appIcon.usesGlyph
+                          && (!appIcon.tinted || !root.tintAvailable)
                         opacity: appIcon.dim
                         // Both effect styles render through the layer: it is
                         // what carries layer.textureSize, and Colorize samples
@@ -813,20 +819,24 @@ Panel {
                         layer.effect: MultiEffect { saturation: -1.0 }
                       }
 
-                      // "theme": re-hue the already-desaturated icon to the bar
-                      // foreground while leaving its luminance alone, so the
-                      // artwork's own light and dark survive as contrast and
-                      // cutouts. Colorize and not ColorOverlay, which floods
-                      // the whole silhouette flat, nor MultiEffect's
-                      // colorization, which this Qt build ignores.
-                      Colorize {
+                      // "theme": re-hue the icon to the bar foreground, leaving
+                      // its luminance alone so the artwork's own light and dark
+                      // survive as contrast and cutouts. Lives in IconTint.qml
+                      // behind a Loader so its Qt5Compat import cannot take the
+                      // whole widget down; properties are bound rather than set
+                      // on load, so the tint still tracks a theme change.
+                      Loader {
+                        id: iconTint
                         anchors.fill: parent
-                        visible: appIcon.tinted && iconImage.status === Image.Ready && !appIcon.usesGlyph
-                        source: iconImage
-                        hue: pill.textColor.hslHue
-                        saturation: root.tintSaturation
-                        opacity: appIcon.dim
+                        active: root.tintAvailable && appIcon.tinted
+                          && iconImage.status === Image.Ready && !appIcon.usesGlyph
+                        source: Qt.resolvedUrl("IconTint.qml")
                       }
+
+                      Binding { target: iconTint.item; property: "source"; value: iconImage; when: iconTint.item !== null }
+                      Binding { target: iconTint.item; property: "hue"; value: pill.textColor.hslHue; when: iconTint.item !== null }
+                      Binding { target: iconTint.item; property: "saturation"; value: root.tintSaturation; when: iconTint.item !== null }
+                      Binding { target: iconTint.item; property: "opacity"; value: appIcon.dim; when: iconTint.item !== null }
 
                       Text {
                         anchors.centerIn: parent
