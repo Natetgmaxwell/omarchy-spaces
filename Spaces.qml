@@ -247,6 +247,7 @@ Panel {
       var mon = ws.monitor
       var area = mon ? Model.monitorArea({
         x: mon.x, y: mon.y, width: mon.width, height: mon.height, scale: mon.scale,
+        transform: mon.lastIpcObject ? mon.lastIpcObject.transform : 0,
         reserved: mon.lastIpcObject ? mon.lastIpcObject.reserved : null
       }) : null
       map[ws.id] = { id: ws.id, windows: Model.sortWindows(windows), area: area }
@@ -628,11 +629,12 @@ Panel {
         readonly property real pad: Style.space(label === "" ? 3 : root.metrics.pad)
 
         // Appear animation lives on the delegate: positioner add transitions
-        // can be interrupted and leave items stuck half faded.
-        property real appear: root.dur > 0 ? 0 : 1
+        // can be interrupted and leave items stuck half faded. No binding on
+        // root.dur: changing the animation speed would hide every pill.
+        property real appear: 1
         opacity: appear
         scale: root.cfg.bounce ? 0.6 + 0.4 * appear : 1
-        Component.onCompleted: if (root.dur > 0) pillAppear.start()
+        Component.onCompleted: if (root.dur > 0) { appear = 0; pillAppear.start() }
         NumberAnimation {
           id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur
           easing.type: root.cfg.bounce ? Easing.OutBack : Easing.OutCubic
@@ -763,10 +765,10 @@ Panel {
                   height: implicitHeight
                   property real dim: root.cfg.dimUnfocused && pill.active && !focusedHere && !hovered ? 0.5 : 1
                   Behavior on dim { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
-                  property real appear: root.dur > 0 ? 0 : 1
+                  property real appear: 1
                   opacity: Math.min(1, appear)
                   scale: root.cfg.bounce ? 0.4 + 0.6 * appear : 1
-                  Component.onCompleted: if (root.dur > 0) iconAppear.start()
+                  Component.onCompleted: if (root.dur > 0) { appear = 0; iconAppear.start() }
                   NumberAnimation {
                     id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur
                     easing.type: root.cfg.bounce ? Easing.OutBack : Easing.OutCubic
@@ -1111,10 +1113,17 @@ Panel {
 
     readonly property var workspace: root.workspaceMap[root.previewWorkspaceId] || null
     readonly property var area: workspace ? workspace.area : null
-    readonly property real mapWidth: Style.space(Model.previewWidth(root.cfg.previewSize))
-    readonly property real mapHeight: area ? Math.round(mapWidth * area.height / area.width) : Math.round(mapWidth * 9 / 16)
+    readonly property real desiredMapWidth: Style.space(Model.previewWidth(root.cfg.previewSize))
+    readonly property real horizontalInset: padding * 2 + Style.space(4)
+    readonly property real chromeHeight: previewHeader.implicitHeight + previewFooter.implicitHeight
+      + previewColumn.spacing * 2 + verticalContentInset
+    readonly property var mapSize: Model.previewDimensions(area, desiredMapWidth,
+      availableCardWidth > 0 ? Math.max(1, availableCardWidth - horizontalInset) : desiredMapWidth,
+      availableCardHeight > 0 ? Math.max(1, availableCardHeight - chromeHeight) : Infinity)
+    readonly property real mapWidth: mapSize.width
+    readonly property real mapHeight: mapSize.height
 
-    contentWidth: preview.fittedContentWidth(mapWidth + padding * 2 + Style.space(4))
+    contentWidth: preview.fittedContentWidth(mapWidth + horizontalInset)
     contentHeight: preview.fittedContentHeight(previewColumn.implicitHeight)
 
     onContainsMouseChanged: {
@@ -1139,18 +1148,22 @@ Panel {
       Behavior on scale { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
 
       Item {
+        id: previewHeader
         width: preview.mapWidth
         implicitHeight: Math.max(previewTitle.implicitHeight, previewCount.implicitHeight)
 
         Text {
           id: previewTitle
           anchors.left: parent.left
+          anchors.right: previewCount.left
+          anchors.rightMargin: Style.space(8)
           anchors.verticalCenter: parent.verticalCenter
           text: "Workspace " + (root.previewWorkspaceId === 10 ? "0" : root.previewWorkspaceId)
           color: root.fg
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           font.bold: true
+          elide: Text.ElideRight
         }
 
         Text {
