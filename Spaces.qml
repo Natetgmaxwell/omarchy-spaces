@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -56,15 +57,28 @@ Panel {
   readonly property real trailingGap: vertical ? 0 : Style.spaceReal(1.5)
   readonly property var metrics: Model.densityMetrics(cfg.density)
   readonly property bool widgetHovered: widgetHover.hovered
+  // "theme" icons: how much of the bar foreground's colour they carry. The
+  // icon's own luminance is left alone, so apps stay told apart by their
+  // shape and internal contrast rather than by hue.
+  readonly property real tintSaturation: 0.35
+
+  // "flat" draws no pill at all, the way the built-in workspaces widget does:
+  // the label's own opacity carries occupancy and the glyph marks the active one.
+  readonly property bool flatPills: cfg.activeStyle === "flat"
+  // Flat pills have no background to contain a workspace, so the gap between
+  // them is the only thing grouping icons to their number. Density alone
+  // leaves them reading as one continuous run.
+  readonly property int flatGap: 10
 
   function activeFill() {
+    if (root.flatPills) return "transparent"
     if (cfg.activeStyle === "solid") return root.fg
     if (cfg.activeStyle === "accent") return Color.accent
     return Util.alpha(root.fg, 0.18)
   }
 
   function activeText() {
-    return cfg.activeStyle === "subtle" ? root.fg : root.bg
+    return cfg.activeStyle === "subtle" || root.flatPills ? root.fg : root.bg
   }
 
   // ------------------------------------------------------------ Hyprland state
@@ -570,7 +584,7 @@ Panel {
     anchors.leftMargin: root.vertical ? Math.round((root.barSize - root.pillThickness) / 2) : 0
     anchors.topMargin: root.vertical ? 0 : Math.round((root.barSize - root.pillThickness) / 2)
     columns: root.vertical ? 1 : Math.max(1, root.workspaceIds.length + 1)
-    spacing: Style.space(root.metrics.gap)
+    spacing: Style.space(root.metrics.gap + (root.flatPills ? root.flatGap : 0))
 
     Repeater {
       id: pillRepeater
@@ -643,6 +657,7 @@ Panel {
           anchors.fill: parent
           radius: root.pillRadius
           color: pill.active ? root.activeFill()
+            : root.flatPills ? "transparent"
             : pill.hovered ? Util.alpha(root.fg, 0.12)
             : pill.occupied ? Util.alpha(root.fg, 0.06)
             : "transparent"
@@ -724,6 +739,13 @@ Panel {
                     ? Model.focusedLabel(item, info.name, root.cfg.titleLength) : ""
                   readonly property bool hovered: iconMouse.containsMouse
                   readonly property string agentState: item ? root.agentStateFor(item.addresses) : ""
+                  // A nerd font stand-in, so an app is drawn in the same font
+                  // and weight as the rest of the bar. Empty when nothing maps,
+                  // and the tinted artwork is used instead.
+                  readonly property string glyph: root.cfg.iconStyle === "glyph" && item
+                    ? Model.appGlyph(item.appId, info.name, Model.webAppHost(item.appId)) : ""
+                  readonly property bool usesGlyph: glyph !== ""
+                  readonly property bool tinted: root.cfg.iconStyle === "theme" || root.cfg.iconStyle === "glyph"
 
                   implicitWidth: iconRow.implicitWidth + Style.space(4)
                   implicitHeight: Math.max(root.iconPx, iconRow.implicitHeight) + Style.space(4)
@@ -760,28 +782,69 @@ Panel {
                         id: iconImage
                         anchors.fill: parent
                         source: appIcon.info.source
-                        sourceSize.width: root.iconPx * 2
-                        sourceSize.height: root.iconPx * 2
+                        // Decode well above the drawn size: these land at ~16px
+                        // on the bar, where every sample counts.
+                        sourceSize.width: root.iconPx * 3
+                        sourceSize.height: root.iconPx * 3
                         fillMode: Image.PreserveAspectFit
                         smooth: true
-                        mipmap: true
+                        // mipmap softens at this size, and nothing here is
+                        // downscaled far enough to need it.
+                        mipmap: false
                         asynchronous: true
-                        visible: status === Image.Ready
+                        visible: status === Image.Ready && !appIcon.tinted && !appIcon.usesGlyph
                         opacity: appIcon.dim
-                        layer.enabled: root.cfg.iconStyle === "mono"
+                        // Both effect styles render through the layer: it is
+                        // what carries layer.textureSize, and Colorize samples
+                        // the item's texture provider, so switching it off
+                        // costs the supersampling and visibly softens icons.
+                        layer.enabled: root.cfg.iconStyle !== "color"
+                        // Without an explicit size the layer is rasterised at
+                        // the item's logical size and throws the extra detail
+                        // away before the effect ever sees it.
+                        layer.textureSize: Qt.size(root.iconPx * 3, root.iconPx * 3)
+                        layer.smooth: true
                         layer.effect: MultiEffect { saturation: -1.0 }
                       }
 
-                      // Letter tile when no icon could be resolved.
+                      // "theme": re-hue the already-desaturated icon to the bar
+                      // foreground while leaving its luminance alone, so the
+                      // artwork's own light and dark survive as contrast and
+                      // cutouts. Colorize and not ColorOverlay, which floods
+                      // the whole silhouette flat, nor MultiEffect's
+                      // colorization, which this Qt build ignores.
+                      Colorize {
+                        anchors.fill: parent
+                        visible: appIcon.tinted && iconImage.status === Image.Ready && !appIcon.usesGlyph
+                        source: iconImage
+                        hue: pill.textColor.hslHue
+                        saturation: root.tintSaturation
+                        opacity: appIcon.dim
+                      }
+
+                      Text {
+                        anchors.centerIn: parent
+                        visible: appIcon.usesGlyph
+                        text: appIcon.glyph
+                        color: pill.textColor
+                        opacity: appIcon.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Math.round(root.iconPx * 0.95)
+                        renderType: Text.NativeRendering
+                      }
+
+                      // Letter tile when no icon could be resolved. The plate
+                      // is dropped once icons are monochrome, so it sits as
+                      // lightly on the bar as the glyphs beside it.
                       Rectangle {
                         anchors.fill: parent
-                        visible: iconImage.status !== Image.Ready
+                        visible: !appIcon.usesGlyph && iconImage.status !== Image.Ready
                         opacity: appIcon.dim
                         radius: Style.cornerRadius > 0 ? width * 0.25 : 0
-                        color: Util.alpha(pill.textColor, 0.2)
+                        color: appIcon.tinted ? "transparent" : Util.alpha(pill.textColor, 0.2)
                         Text {
                           anchors.centerIn: parent
-                          text: String(appIcon.info.name || (appIcon.item ? appIcon.item.appId : "?")).charAt(0).toUpperCase()
+                          text: Model.fallbackLetter(appIcon.info.name, appIcon.item ? appIcon.item.appId : "")
                           color: pill.textColor
                           font.family: root.fontFamily
                           font.pixelSize: Math.round(root.iconPx * 0.62)
@@ -1329,7 +1392,9 @@ Panel {
             key: "iconStyle"
             options: [
               { value: "color", label: "Color" },
-              { value: "mono", label: "Monochrome" }
+              { value: "mono", label: "Monochrome" },
+              { value: "theme", label: "Theme" },
+              { value: "glyph", label: "Glyph" }
             ]
           }
 
@@ -1381,7 +1446,8 @@ Panel {
             options: [
               { value: "subtle", label: "Subtle" },
               { value: "solid", label: "Solid" },
-              { value: "accent", label: "Accent" }
+              { value: "accent", label: "Accent" },
+              { value: "flat", label: "Flat" }
             ]
           }
 
