@@ -75,6 +75,18 @@ Panel {
   // leaves them reading as one continuous run.
   readonly property int flatGap: 10
 
+  // The active glyph is wider than a digit, so a label sized to its own content
+  // makes every workspace to its right slide across when focus moves. Measuring
+  // the widest label once lets each one reserve that width, the way the
+  // built-in widget's fixed-width buttons do, so switching never reflows.
+  TextMetrics {
+    id: labelMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.body
+    font.bold: true
+    text: "󱓻"
+  }
+
   function activeFill() {
     if (root.flatPills) return "transparent"
     if (cfg.activeStyle === "solid") return root.fg
@@ -704,6 +716,10 @@ Panel {
             text: pill.label
             color: pill.textColor
             opacity: pill.occupied || pill.active ? 1 : 0.5
+            // Reserve the widest label's width so swapping a digit for the
+            // active glyph does not shift everything after it.
+            width: Math.max(labelMetrics.width, implicitWidth)
+            horizontalAlignment: Text.AlignHCenter
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             font.bold: pill.active
