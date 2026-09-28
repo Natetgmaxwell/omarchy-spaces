@@ -16,12 +16,12 @@ var DEFAULTS = {
   dimUnfocused: true,         // dim other windows on the active workspace
   focusedTitle: false,        // show the focused window's title next to its icon
   titleLength: 24,
-  activeStyle: "subtle",      // "subtle" | "solid" | "accent"
+  activeStyle: "subtle",      // "subtle" | "solid" | "accent" | "flat" (no pill background)
   labelStyle: "number",       // "number" | "glyph" | "none"
   animations: true,
   animationSpeed: "normal",   // "slow" | "normal" | "fast"
   scrollSwitch: true,
-  iconStyle: "color",         // "color" | "mono"
+  iconStyle: "color",         // "color" | "mono" | "theme" (tinted) | "glyph" (nerd font)
   urgentHighlight: true,      // pulse workspaces whose windows ask for attention
   middleClickClose: false,    // middle-click an icon closes that window
   tooltips: true,
@@ -35,12 +35,12 @@ var DEFAULTS = {
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]
-var ICON_STYLES = ["color", "mono"]
+var ICON_STYLES = ["color", "mono", "theme", "glyph"]
 var DENSITIES = ["compact", "normal", "roomy"]
 var ACTIVE_CLICKS = ["none", "previous"]
 var SETTINGS_BUTTONS = ["hover", "always", "never"]
 var PREVIEW_SIZES = ["small", "medium", "large"]
-var ACTIVE_STYLES = ["subtle", "solid", "accent"]
+var ACTIVE_STYLES = ["subtle", "solid", "accent", "flat"]
 var LABEL_STYLES = ["number", "glyph", "none"]
 var SPEEDS = ["slow", "normal", "fast"]
 
@@ -246,6 +246,95 @@ function appIdCandidates(appId) {
   return out
 }
 
+// Nerd Font glyphs standing in for app artwork, so the workspace icons are
+// drawn in the same font, weight and colour as the rest of the bar. Matched
+// against the window class, the desktop entry name and, for Chromium web apps,
+// the site host. Keys are matched as substrings, longest first, so "chromium"
+// wins over "chrome".
+var GLYPHS = {
+  "youtube": "󰗃",
+  "discord": "",
+  "spotify": "󰓇",
+  "slack": "󰒱",
+  "github": "󰊤",
+  "gitlab": "󰮠",
+  "whatsapp": "󰖣",
+  "telegram": "",
+  "figma": "",
+  "notion": "",
+  "obsidian": "",
+  // No "zen" or "zed": Nerd Fonts has neither, and a generic globe loses the
+  // app's identity. Zen is served by ICON_OVERRIDES below instead.
+  "firefox": "󰈹",
+  "librewolf": "󰈹",
+  "chromium": "",
+  "chrome": "",
+  "brave": "",
+  "thunderbird": "",
+  "mail": "󰇮",
+  "gmail": "󰇮",
+  "alacritty": "󰆍",
+  "kitty": "󰆍",
+  "ghostty": "󰆍",
+  "foot": "󰆍",
+  "wezterm": "󰆍",
+  "terminal": "󰆍",
+  "herdr": "󰕰",
+  "code": "",
+  "nvim": "",
+  "vim": "",
+  "steam": "󰓓",
+  "docker": "󰡨",
+  "calendar": "󰃭",
+  "nautilus": "󰉋",
+  "files": "󰉋",
+  "folder": "󰉋",
+  "music": "󰝚",
+  "vlc": "󰕼",
+  "mpv": "󰕼",
+  "agent": "󰚩",
+  "claude": "󰚩"
+}
+
+var GLYPH_KEYS = Object.keys(GLYPHS).sort(function(l, r) { return r.length - l.length })
+
+// Returns a glyph for an app, or "" when nothing is a confident match.
+function appGlyph(appId, name, host) {
+  var hay = (String(appId || "") + " " + String(name || "") + " " + String(host || "")).toLowerCase()
+  if (hay.replace(/\s/g, "") === "") return ""
+  for (var i = 0; i < GLYPH_KEYS.length; i++) {
+    if (hay.indexOf(GLYPH_KEYS[i]) !== -1) return GLYPHS[GLYPH_KEYS[i]]
+  }
+  return ""
+}
+
+// Artwork overrides, by exact window class, for apps whose shipped icon does not
+// survive being tinted down to one colour. Zen's is white rings on a near-black
+// tile: as-is it renders as a dark box, and Qt cannot cut the plate away at
+// runtime. The replacement is Zen's own mark, pre-made as a white silhouette on
+// transparent and thickened so it carries the weight of the glyphs beside it.
+// Values are icon-theme names, resolved through the usual icon scan.
+var ICON_OVERRIDES = {
+  "zen": "zen-symbolic"
+}
+
+function iconOverride(appId) {
+  return ICON_OVERRIDES[String(appId || "").toLowerCase()] || ""
+}
+
+// The letter to stand in for an app with no resolvable icon. Prefers the
+// readable tail of a reverse-DNS class, so org.omarchy.herdr reads "H" and
+// not "O" along with everything else under that prefix.
+function fallbackLetter(name, appId) {
+  var label = String(name || "")
+  var id = String(appId || "")
+  if (label === "" || label === id) {
+    var parts = id.split(".")
+    label = parts.length > 1 ? parts[parts.length - 1] : id
+  }
+  return label.charAt(0).toUpperCase()
+}
+
 // Chromium-family --app windows use classes like
 // "chrome-web.whatsapp.com__-Default" or "brave-app.hey.com__-Profile_1".
 // Returns the host ("web.whatsapp.com") or "" when the class is not one.
@@ -397,6 +486,7 @@ if (typeof module !== "undefined") {
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
     focusedLabel: focusedLabel, webAppHost: webAppHost, appIdCandidates: appIdCandidates, iconPathScore: iconPathScore,
-    iconNameFromPath: iconNameFromPath, stepWorkspace: stepWorkspace, mergedEntry: mergedEntry
+    iconNameFromPath: iconNameFromPath, stepWorkspace: stepWorkspace, mergedEntry: mergedEntry,
+    fallbackLetter: fallbackLetter, appGlyph: appGlyph, iconOverride: iconOverride
   }
 }
