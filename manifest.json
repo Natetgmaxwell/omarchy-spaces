@@ -147,6 +147,12 @@
         "default": true
       },
       {
+        "key": "bounce",
+        "type": "bool",
+        "label": "Bounce",
+        "default": true
+      },
+      {
         "key": "animationSpeed",
         "type": "enum",
         "label": "Animation speed",

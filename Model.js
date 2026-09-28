@@ -20,6 +20,8 @@ var DEFAULTS = {
   labelStyle: "number",       // "number" | "glyph" | "none"
   animations: true,
   animationSpeed: "normal",   // "slow" | "normal" | "fast"
+  bounce: true,               // overshoot and scale on appear; off is closer to
+                              // the built-in workspaces widget, which has none
   scrollSwitch: true,
   iconStyle: "color",         // "color" | "mono" | "theme" (tinted) | "glyph" (nerd font)
   urgentHighlight: true,      // pulse workspaces whose windows ask for attention
@@ -78,6 +80,7 @@ function resolveSettings(raw) {
     labelStyle: oneOf(s.labelStyle, LABEL_STYLES, d.labelStyle),
     animations: bool(s.animations, d.animations),
     animationSpeed: oneOf(s.animationSpeed, SPEEDS, d.animationSpeed),
+    bounce: bool(s.bounce, d.bounce),
     scrollSwitch: bool(s.scrollSwitch, d.scrollSwitch),
     iconStyle: oneOf(s.iconStyle, ICON_STYLES, d.iconStyle),
     urgentHighlight: bool(s.urgentHighlight, d.urgentHighlight),
