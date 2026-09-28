@@ -626,9 +626,12 @@ Panel {
         // can be interrupted and leave items stuck half faded.
         property real appear: root.dur > 0 ? 0 : 1
         opacity: appear
-        scale: 0.6 + 0.4 * appear
+        scale: root.cfg.bounce ? 0.6 + 0.4 * appear : 1
         Component.onCompleted: if (root.dur > 0) pillAppear.start()
-        NumberAnimation { id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
+        NumberAnimation {
+          id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur
+          easing.type: root.cfg.bounce ? Easing.OutBack : Easing.OutCubic
+        }
 
         width: implicitWidth
         height: implicitHeight
@@ -757,9 +760,12 @@ Panel {
                   Behavior on dim { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
                   property real appear: root.dur > 0 ? 0 : 1
                   opacity: Math.min(1, appear)
-                  scale: 0.4 + 0.6 * appear
+                  scale: root.cfg.bounce ? 0.4 + 0.6 * appear : 1
                   Component.onCompleted: if (root.dur > 0) iconAppear.start()
-                  NumberAnimation { id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
+                  NumberAnimation {
+                    id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur
+                    easing.type: root.cfg.bounce ? Easing.OutBack : Easing.OutCubic
+                  }
                   Behavior on implicitWidth { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
 
                   // No plate behind an icon: which app holds focus is not what
@@ -1516,6 +1522,14 @@ Panel {
           SectionTitle { text: "ANIMATION" }
 
           ToggleSetting { label: "Animations"; key: "animations" }
+
+          ToggleSetting {
+            visible: root.cfg.animations
+            label: "Bounce"
+            description: root.cfg.bounce ? "Pills and icons spring past their size as they appear"
+              : "They settle straight in, like the built-in workspaces widget"
+            key: "bounce"
+          }
 
           ChoiceSetting {
             visible: root.cfg.animations
