@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -7,6 +8,7 @@ import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
+import "Marks.js" as Marks
 
 // Workspace switcher that shows which apps are open on each workspace.
 //
@@ -767,12 +769,16 @@ Panel {
                     ? Model.focusedLabel(item, info.name, root.cfg.titleLength) : ""
                   readonly property bool hovered: iconMouse.containsMouse
                   readonly property string agentState: item ? root.agentStateFor(item.addresses) : ""
+                  // The app's own logo as a one-colour vector, filled with the
+                  // bar foreground so it reads like the bar's own icons.
+                  readonly property var mark: root.cfg.iconStyle === "glyph" && item
+                    ? Marks.mark(Model.appMarkKey(item.appId, info.name, Model.webAppHost(item.appId))) : null
                   // A nerd font stand-in, so an app is drawn in the same font
                   // and weight as the rest of the bar. Empty when nothing maps,
                   // and the tinted artwork is used instead.
-                  readonly property string glyph: root.cfg.iconStyle === "glyph" && item
+                  readonly property string glyph: root.cfg.iconStyle === "glyph" && item && !mark
                     ? Model.appGlyph(item.appId, info.name, Model.webAppHost(item.appId)) : ""
-                  readonly property bool usesGlyph: glyph !== ""
+                  readonly property bool usesGlyph: glyph !== "" || mark !== null
                   readonly property bool tinted: root.cfg.iconStyle === "theme" || root.cfg.iconStyle === "glyph"
 
                   implicitWidth: iconRow.implicitWidth + Style.space(4)
@@ -856,9 +862,31 @@ Panel {
                       Binding { target: iconTint.item; property: "saturation"; value: root.tintSaturation; when: iconTint.item !== null }
                       Binding { target: iconTint.item; property: "opacity"; value: appIcon.dim; when: iconTint.item !== null }
 
+                      // Brand marks fill their whole 24px grid where Material
+                      // icons keep a 2px inset, so they are drawn smaller to
+                      // carry the same visual weight as the glyphs beside them.
+                      Shape {
+                        id: markShape
+                        readonly property real side: Math.round(root.iconPx * (appIcon.mark && appIcon.mark.padded ? 1.0 : 0.8))
+                        anchors.centerIn: parent
+                        width: side
+                        height: side
+                        visible: appIcon.mark !== null
+                        opacity: appIcon.dim
+                        preferredRendererType: Shape.CurveRenderer
+                        ShapePath {
+                          fillColor: pill.textColor
+                          fillRule: ShapePath.WindingFill
+                          strokeWidth: -1
+                          strokeColor: "transparent"
+                          scale: Qt.size(markShape.side / 24, markShape.side / 24)
+                          PathSvg { path: appIcon.mark ? appIcon.mark.path : "" }
+                        }
+                      }
+
                       Text {
                         anchors.centerIn: parent
-                        visible: appIcon.usesGlyph
+                        visible: appIcon.glyph !== ""
                         text: appIcon.glyph
                         color: pill.textColor
                         opacity: appIcon.dim

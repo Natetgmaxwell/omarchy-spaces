@@ -225,4 +225,17 @@ test("parsePids drops junk and init", () => {
   assert.deepStrictEqual(M.parsePids("12,abc,1,,34"), [12, 34])
 })
 
+test("appMarkKey matches web app hosts, classes and names exactly", () => {
+  assert.strictEqual(M.appMarkKey("chrome-youtube.com__-Default", "YouTube", "youtube.com"), "youtube")
+  assert.strictEqual(M.appMarkKey("chrome-x.com__-Default", "", "x.com"), "x")
+  assert.strictEqual(M.appMarkKey("zen", "Zen Browser", ""), "zen")
+  assert.strictEqual(M.appMarkKey("chrome-100.82.185.34__stream-Default", "gbrain atlas", "100.82.185.34"), "gbrain")
+  assert.strictEqual(M.appMarkKey("xterm", "XTerm", ""), "")
+  assert.strictEqual(M.appMarkKey("theyapp", "They", ""), "")
+})
+
+test("appGlyph ignores a web app's chrome- class", () => {
+  assert.strictEqual(M.appGlyph("chrome-example.com__-Default", "Example", "example.com"), "")
+})
+
 if (failed) { console.log(failed + " failed"); process.exit(1) }

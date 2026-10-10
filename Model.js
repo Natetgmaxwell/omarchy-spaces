@@ -303,10 +303,49 @@ var GLYPH_KEYS = Object.keys(GLYPHS).sort(function(l, r) { return r.length - l.l
 
 // Returns a glyph for an app, or "" when nothing is a confident match.
 function appGlyph(appId, name, host) {
-  var hay = (String(appId || "") + " " + String(name || "") + " " + String(host || "")).toLowerCase()
+  // A web app's class is "chrome-<host>__...", so leave it out of the match
+  // when the host is known, or every unmapped web app wears Chrome's logo.
+  var hay = ((host ? "" : String(appId || "")) + " " + String(name || "") + " " + String(host || "")).toLowerCase()
   if (hay.replace(/\s/g, "") === "") return ""
   for (var i = 0; i < GLYPH_KEYS.length; i++) {
     if (hay.indexOf(GLYPH_KEYS[i]) !== -1) return GLYPHS[GLYPH_KEYS[i]]
+  }
+  return ""
+}
+
+// Vector marks (Marks.js) beat glyphs: they are the app's own logo, drawn in
+// one colour. Matched exactly, never as substrings, against the window class,
+// the web app's host and the desktop entry name - "x" and "hey" are far too
+// short to find inside anything else.
+var MARK_MATCH = {
+  "youtube": "youtube", "youtube.com": "youtube",
+  "discord": "discord", "discord.com": "discord",
+  "whatsapp": "whatsapp", "web.whatsapp.com": "whatsapp",
+  "x": "x", "x.com": "x", "twitter.com": "x",
+  "google maps": "googlemaps", "maps.google.com": "googlemaps",
+  "google photos": "googlephotos", "photos.google.com": "googlephotos",
+  "google messages": "googlemessages", "messages.google.com": "googlemessages",
+  "google contacts": "contacts", "contacts.google.com": "contacts",
+  "basecamp": "basecamp", "launchpad.37signals.com": "basecamp", "3.basecamp.com": "basecamp",
+  "hey": "hey", "hey.com": "hey", "app.hey.com": "hey",
+  "zoom": "zoom", "zoom.us": "zoom", "app.zoom.us": "zoom",
+  "tailscale": "tailscale", "login.tailscale.com": "tailscale",
+  "docker": "docker", "docker desktop": "docker",
+  "zen": "zen", "zen-browser": "zen", "zen browser": "zen", "app.zen_browser.zen": "zen",
+  "claude": "claude", "claude.ai": "claude",
+  "mpv": "mpv",
+  "openpods": "earbuds", "librepods": "earbuds", "me.kavishdevar.librepods": "earbuds",
+  "hermes": "hermes",
+  "gbrain atlas": "gbrain"
+}
+
+// Returns a Marks.js key for an app, or "" when none is an exact match.
+function appMarkKey(appId, name, host) {
+  var h = String(host || "").toLowerCase()
+  var tokens = [appKey(appId), h, h.replace(/^www\./, ""), String(name || "").toLowerCase()]
+  for (var i = 0; i < tokens.length; i++) {
+    var hit = tokens[i] !== "" && MARK_MATCH.hasOwnProperty(tokens[i]) ? MARK_MATCH[tokens[i]] : ""
+    if (hit) return hit
   }
   return ""
 }
@@ -501,6 +540,6 @@ if (typeof module !== "undefined") {
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
     focusedLabel: focusedLabel, webAppHost: webAppHost, appIdCandidates: appIdCandidates, iconPathScore: iconPathScore,
     iconNameFromPath: iconNameFromPath, stepWorkspace: stepWorkspace, mergedEntry: mergedEntry,
-    fallbackLetter: fallbackLetter, appGlyph: appGlyph, iconOverride: iconOverride
+    fallbackLetter: fallbackLetter, appGlyph: appGlyph, appMarkKey: appMarkKey, iconOverride: iconOverride
   }
 }
